@@ -1,0 +1,4 @@
+[submodule "ICP.NET"]
+	path = linked/ICP.NET
+	url = https://github.com/CoreLedger-TEOS/ICP.NET
+	branch = public-signing-types
