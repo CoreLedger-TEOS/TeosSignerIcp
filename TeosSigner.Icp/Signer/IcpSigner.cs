@@ -11,10 +11,12 @@ namespace TeosSigner.Icp.Signer;
 class IcpSigner
 {
 	public IIdentity Identity { get; }
+	public string Name { get; }
 
-	public IcpSigner(IIdentity identity)
+	public IcpSigner(IIdentity identity, string name)
 	{
 		Identity = identity;
+		Name = name;
 	}
 
 	public string SignTransaction(Guid txId, IcpSigningParameters signingParameters)

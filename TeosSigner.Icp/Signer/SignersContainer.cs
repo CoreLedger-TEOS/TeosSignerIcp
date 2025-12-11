@@ -7,8 +7,8 @@ class SignersContainer
 	public SignersContainer(IOptions<IcpSignerOptions> options)
 	{
 		IEnumerable<IcpSigner> signers = options.Value.IdentityFiles
-			.Select(identityFile => IcpHelper.BuildIdentity(identityFile))
-			.Select(identity => new IcpSigner(identity));
+			.Select(identityFile => new { identity = IcpHelper.BuildIdentity(identityFile), name = identityFile})
+			.Select(i => new IcpSigner(i.identity, i.name));
 		_signers.AddRange(signers);
 	}
 

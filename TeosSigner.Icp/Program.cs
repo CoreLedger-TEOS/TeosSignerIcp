@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using TeosSigner.Icp;
@@ -17,15 +18,16 @@ try
 {
 	var teosApi = services.GetRequiredService<TeosApiClient>();
 	var signService = services.GetRequiredService<IcpSignService>();
-	IEnumerable<string> signerAddresses = services.GetRequiredService<SignersContainer>()
-		.Signers.Select(s => s.Identity.GetPrincipal().ToText());
+	var signers = services
+		.GetRequiredService<SignersContainer>()
+		.Signers.Select(s => new { address = s.Identity.GetPrincipal().ToText(), name = s.Name });
 
-	Console.WriteLine("Welcome to TeosSigner");
-	Console.WriteLine();
+	DrawWelcome();
+
 	Console.WriteLine("Configured addresses:");
-	foreach (var signerAddress in signerAddresses)
+	foreach (var signer in signers)
 	{
-		Console.WriteLine($"- {signerAddress}");
+		Console.WriteLine($"- {signer.address} ({signer.name})");
 	}
 
 	Console.WriteLine();
@@ -34,30 +36,38 @@ try
 
 	while (true)
 	{
-		IEnumerable<Guid> all = await teosApi.GetPendingTransactionIdsAsync(signerAddresses);
-		List<Guid> toProcess = all.Where(t => !signService.Processed.Contains(t)).ToList();
-
-		if (toProcess.Count != 0)
+		try
 		{
-			await cts.CancelAsync();
-			await spinnerTask;
+			IEnumerable<Guid> all = await teosApi.GetPendingTransactionIdsAsync(signers.Select(s => s.address));
 
-			Console.WriteLine($"To process {toProcess.Count} pending transactions");
+			List<Guid> toProcess = all.Where(t => !signService.Processed.Contains(t)).ToList();
 
-			foreach (var id in toProcess)
+			if (toProcess.Count != 0)
 			{
-				Console.WriteLine($"Processing transaction '{id}'...");
+				await cts.CancelAsync();
+				await spinnerTask;
 
-				await signService.DoSigningStuff(id);
-				await Task.Delay(txSignDelay);
+				Console.WriteLine($"To process {toProcess.Count} pending transactions");
 
-				Console.WriteLine($"Transaction '{id}' successfully processed");
-				Console.WriteLine();
+				foreach (var id in toProcess)
+				{
+					Console.WriteLine($"Processing transaction '{id}'...");
+
+					await signService.DoSigningStuff(id);
+					await Task.Delay(txSignDelay);
+
+					Console.WriteLine($"Transaction '{id}' successfully processed");
+					Console.WriteLine();
+				}
+
+				cts.Dispose();
+				cts = new CancellationTokenSource();
+				spinnerTask = spinner.ShowSpinner(cts.Token);
 			}
-
-			cts.Dispose();
-			cts = new CancellationTokenSource();
-			spinnerTask = spinner.ShowSpinner(cts.Token);
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine(ex);
 		}
 
 		await Task.Delay(pollingInterval);
@@ -84,9 +94,7 @@ finally
 
 static IServiceProvider BuildServices()
 {
-	var configuration = new ConfigurationBuilder()
-		.AddJsonFile("appsettings.json")
-		.Build();
+	var configuration = new ConfigurationBuilder().AddJsonFile("appsettings.json").Build();
 
 	var services = new ServiceCollection();
 	services.Configure<ApiClientOptions>(configuration);
@@ -97,4 +105,38 @@ static IServiceProvider BuildServices()
 
 	services.AddSingleton<IcpSignService>();
 	return services.BuildServiceProvider();
+}
+
+static void DrawWelcome()
+{
+	var ver = GetVersion();
+	string banner = $"""
+		################################################################################
+		#                                                                              #
+		#                           W I L L K O M M E N                                #
+		#                                 B E I M                                      #
+		#                                                                              #
+		#                           F A B E L H A F T E N                              #
+		#                         U N T E R Z E I C H N E R                            #
+		#                                                                              #
+		#                                  /\_/\                                       #
+		#                                 ( o.o )                                      #
+		#                                  > ^ <                                       #
+		#                                                                              #
+		#                                                                              #
+		#                                 v.{ver}                                      #
+		################################################################################
+		""";
+
+	Console.WriteLine(banner);
+	Console.WriteLine();
+}
+
+static string GetVersion()
+{
+	string version_ = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.0";
+	var version = Version.Parse(version_);
+
+	var result = $"{version.Major}.{version.Minor}.{version.Build}";
+	return result;
 }

@@ -18,7 +18,23 @@ class TeosApiClient
 
 	public async Task<IEnumerable<Guid>> GetPendingTransactionIdsAsync(IEnumerable<string> addresses)
 	{
-		// filter
+		var filter = BuildFilter(addresses);
+
+		// select
+		var select = "$select=Id";
+
+		var uri = new Uri($"Transactions?{filter}&{select}", UriKind.Relative);
+
+		var client = BuildClient();
+		var response = await client.GetAsync(uri);
+		var responseBody = await response.Content.ReadAsStringAsync();
+
+		var ids = TeosJson.Deserialize<GetTransactionsResponse>(responseBody);
+		return ids.Value.Select(x => x.Id);
+	}
+
+	private static string BuildFilter(IEnumerable<string> addresses)
+	{
 		var signedBy = new ConditionBuilder(ConditionOperand.Or);
 		foreach (var address in addresses)
 		{
@@ -26,23 +42,15 @@ class TeosApiClient
 			signedBy.AddCondition(condition);
 		}
 
-		var state = new FilterCondition("State", "eq", "1");
+		var state = new FilterCondition("State", "eq", "null");
 
 		var filterConditionsBuilder = new ConditionBuilder(ConditionOperand.And);
 		filterConditionsBuilder.AddCondition(signedBy);
 		filterConditionsBuilder.AddCondition(state);
+
 		var filter = $"$filter={filterConditionsBuilder.Compile()}";
 
-		// select
-		var select = "$select=Id";
-
-		var uri = new Uri($"Transactions?{filter}&{select}", UriKind.Relative);
-
-		var response = await BuildClient().GetAsync(uri);
-		var responseBody = await response.Content.ReadAsStringAsync();
-
-		var ids = TeosJson.Deserialize<GetTransactionsResponse>(responseBody);
-		return ids.Value.Select(x => x.Id);
+		return filter;
 	}
 
 	public async Task<IcpSigningParameters> GetSiginingParametersAsync(Guid txId)
