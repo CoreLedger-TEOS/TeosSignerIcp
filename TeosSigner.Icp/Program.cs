@@ -22,7 +22,8 @@ try
 		.GetRequiredService<SignersContainer>()
 		.Signers.Select(s => new { address = s.Identity.GetPrincipal().ToText(), name = s.Name });
 
-	DrawWelcome();
+	// DrawWelcome();
+	DrawWelcomeOfficial();
 
 	Console.WriteLine("Configured addresses:");
 	foreach (var signer in signers)
@@ -105,6 +106,15 @@ static IServiceProvider BuildServices()
 
 	services.AddSingleton<IcpSignService>();
 	return services.BuildServiceProvider();
+}
+
+static void DrawWelcomeOfficial()
+{
+	var ver = GetVersion();
+	string banner = $"Welcome to TeosSigner.ICP (v.{ver})";
+
+	Console.WriteLine(banner);
+	Console.WriteLine();
 }
 
 static void DrawWelcome()

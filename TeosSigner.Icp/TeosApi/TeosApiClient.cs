@@ -42,7 +42,9 @@ class TeosApiClient
 			signedBy.AddCondition(condition);
 		}
 
-		var state = new FilterCondition("State", "eq", "null");
+		var state = new ConditionBuilder(ConditionOperand.Or);
+		state.AddCondition(new FilterCondition("State", "eq", "null"));
+		state.AddCondition(new FilterCondition("State", "eq", "1"));
 
 		var filterConditionsBuilder = new ConditionBuilder(ConditionOperand.And);
 		filterConditionsBuilder.AddCondition(signedBy);

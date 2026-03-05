@@ -27,11 +27,15 @@ class IcpSigner
 		var signedReadStateRequest = SignStatusRequest(signedCallRequest);
 		byte[] readStateRequestCbor = IcpHelper.SerializeSignedContent(signedReadStateRequest);
 
+		var sha256 = SHA256HashFunction.Create();
+		var callRequestContentHash = RequestId.FromObject(signedCallRequest.Content, sha256).RawValue;
+
 		var txMessage = new IcpSignedTransactionMessage
 		{
 			TxId = txId.ToString(),
 			CallRequest = callRequestCbor,
-			ReadStateRequest = readStateRequestCbor
+			ReadStateRequest = readStateRequestCbor,
+			CallRequestContentHash = callRequestContentHash
 		};
 		var signedTransaction = JsonSerializer.Serialize(txMessage);
 		return signedTransaction;
@@ -44,7 +48,7 @@ class IcpSigner
 		Principal sender = signingParameters.Sender;
 
 		string method = signingParameters.Method;
-		ICTimestamp expiry = ICTimestamp.Future(TimeSpan.FromSeconds(60));
+		ICTimestamp expiry = ICTimestamp.Future(TimeSpan.FromMinutes(4));
 
 		CallRequest callRequest = IcpHelper.BuildRequest(sender, expiry, method, arguments, canisterId);
 
@@ -60,7 +64,7 @@ class IcpSigner
 		var requestStatusPath = StatePath.FromSegments("request_status", requestId.RawValue);
 		var timePath = StatePath.FromSegments("time");
 		var paths = new List<StatePath> { requestStatusPath, timePath };
-		var expiry = ICTimestamp.Future(TimeSpan.FromSeconds(60));
+		var expiry = ICTimestamp.Future(TimeSpan.FromMinutes(4));
 
 		var readStateRequest = new ReadStateRequest(paths, Identity.GetPrincipal(), expiry);
 

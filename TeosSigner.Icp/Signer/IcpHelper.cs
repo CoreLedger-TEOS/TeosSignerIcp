@@ -35,4 +35,5 @@ public class IcpSignedTransactionMessage
 	public string TxId { get; set; }
 	public byte[] ReadStateRequest { get; set; }
 	public byte[] CallRequest { get; set; }
+	public byte[] CallRequestContentHash { get; set; }
 }
