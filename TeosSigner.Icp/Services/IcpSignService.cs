@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Options;
 using TeosSigner.Icp.Signer;
 using TeosSigner.Icp.TeosApi;
 using TeosSigner.Icp.TeosApi.Json;
@@ -9,20 +10,21 @@ class IcpSignService
 {
 	private readonly TeosApiClient _teosTeosApiClient;
 	private readonly Dictionary<string, IcpSigner> _signers;
-	private readonly List<Guid> _processed = new();
-	public IEnumerable<Guid> Processed => _processed;
+	private readonly bool _manualConfirmation;
 
-	public IcpSignService(TeosApiClient teosTeosApiClient, SignersContainer signers)
+	public IcpSignService(
+		TeosApiClient teosTeosApiClient,
+		SignersContainer signers,
+		IOptions<IcpTransactionProcessingOptions> options)
 	{
 		_teosTeosApiClient = teosTeosApiClient;
-		_signers = signers.Signers.ToDictionary(s => s.Identity.GetPrincipal().ToText(), s => s);
+		_signers = signers.Signers.ToDictionary(s => s.Principal.ToText(), s => s);
+		_manualConfirmation = options.Value.ManualConfirmation;
 	}
 
-	public async Task DoSigningStuff(Guid txId)
+	public async Task SignAndSubmitAsync(Guid txId, CancellationToken cancellationToken)
 	{
-		_processed.Add(txId);
-
-		IcpSigningParameters signingParameters = await _teosTeosApiClient.GetSiginingParametersAsync(txId);
+		IcpSigningParameters signingParameters = await _teosTeosApiClient.GetSiginingParametersAsync(txId, cancellationToken);
 		var str = TeosJson.Serialize(signingParameters, o => o.WriteIndented = true);
 		if (!ValidateSigningParameters(signingParameters))
 		{
@@ -38,8 +40,11 @@ class IcpSignService
 			return;
 		}
 
-		Console.Write("Press ENTER to sign and submit the transaction... ");
-		Console.ReadLine();
+		if (_manualConfirmation)
+		{
+			Console.Write("Press ENTER to sign and submit the transaction... ");
+			await Console.In.ReadLineAsync(cancellationToken);
+		}
 
 		var signedTransaction = signer.SignTransaction(txId, signingParameters);
 		var submitReq = new SubmitSignedTransactionInput
@@ -50,7 +55,7 @@ class IcpSignService
 		};
 
 		Console.WriteLine("Submitting transaction...");
-		await _teosTeosApiClient.SubmitSignedAsync(txId, submitReq);
+		await _teosTeosApiClient.SubmitSignedAsync(txId, submitReq, cancellationToken);
 	}
 
 	private static bool ValidateSigningParameters(IcpSigningParameters signingParameters)

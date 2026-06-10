@@ -1,33 +1,21 @@
 using System.Net.Http.Headers;
-using Microsoft.Extensions.Options;
-using TeosSigner.Icp.Signer;
 using TeosSigner.Icp.TeosApi.Json;
 using TeosSigner.Icp.TeosApi.Model;
 using TeosSigner.Icp.TeosApi.OData;
 
 namespace TeosSigner.Icp.TeosApi;
 
-class TeosApiClient
+class TeosApiClient(HttpClient client)
 {
-	private readonly ApiClientOptions _options;
-
-	public TeosApiClient(IOptions<ApiClientOptions> options, SignersContainer signers)
-	{
-		_options = options.Value;
-	}
-
-	public async Task<IEnumerable<Guid>> GetPendingTransactionIdsAsync(IEnumerable<string> addresses)
+	public async Task<IEnumerable<Guid>> GetPendingTransactionIdsAsync(IEnumerable<string> addresses, CancellationToken cancellationToken)
 	{
 		var filter = BuildFilter(addresses);
-
-		// select
 		var select = "$select=Id";
 
 		var uri = new Uri($"Transactions?{filter}&{select}", UriKind.Relative);
 
-		var client = BuildClient();
-		var response = await client.GetAsync(uri);
-		var responseBody = await response.Content.ReadAsStringAsync();
+		var response = await client.GetAsync(uri, cancellationToken);
+		var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
 
 		var ids = TeosJson.Deserialize<GetTransactionsResponse>(responseBody);
 		return ids.Value.Select(x => x.Id);
@@ -55,45 +43,35 @@ class TeosApiClient
 		return filter;
 	}
 
-	public async Task<IcpSigningParameters> GetSiginingParametersAsync(Guid txId)
+	public async Task<IcpSigningParameters> GetSiginingParametersAsync(Guid txId, CancellationToken cancellationToken)
 	{
 		var uri = new Uri($"Transactions({txId})/GetSigningParameters", UriKind.Relative);
 
-		var response = await BuildClient().GetAsync(uri);
-		var responseBody = await response.Content.ReadAsStringAsync();
+		var response = await client.GetAsync(uri, cancellationToken);
+		var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
 
 		var parameters = TeosJson.Deserialize<IcpSigningParameters>(responseBody);
 
 		return parameters;
 	}
 
-	public async Task SubmitSignedAsync(Guid txId, SubmitSignedTransactionInput request)
+	public async Task SubmitSignedAsync(Guid txId, SubmitSignedTransactionInput request, CancellationToken cancellationToken)
 	{
 		var uri = new Uri($"Transactions({txId})/Submit", UriKind.Relative);
 
 		var json = TeosJson.Serialize(request);
 		var requestBody = new StringContent(json, new MediaTypeHeaderValue("application/json"));
 
-		var response = await BuildClient().PostAsync(uri, requestBody);
+		var response = await client.PostAsync(uri, requestBody, cancellationToken);
 
-		Console.WriteLine(response.StatusCode);
-	}
-
-	private HttpClient BuildClient()
-	{
-		return new HttpClient()
+		if (!response.IsSuccessStatusCode)
 		{
-			BaseAddress = new Uri(_options.BaseAddress),
-			DefaultRequestHeaders =
-			{
-				Authorization = new AuthenticationHeaderValue("Bearer", _options.BearerToken),
-			}
-		};
+			Console.WriteLine(response.StatusCode);
+			Console.WriteLine(await response.Content.ReadAsStringAsync(cancellationToken));
+		}
+		else
+		{
+			Console.WriteLine($"Transaction '{txId}' successfully submitted.{Environment.NewLine}");
+		}
 	}
-}
-
-class ApiClientOptions
-{
-	public string BearerToken { get; set; }
-	public string BaseAddress { get; set; }
 }

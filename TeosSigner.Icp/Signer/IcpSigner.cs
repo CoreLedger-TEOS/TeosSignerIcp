@@ -8,16 +8,11 @@ using TeosSigner.Icp.TeosApi.Model;
 
 namespace TeosSigner.Icp.Signer;
 
-class IcpSigner
+class IcpSigner(IIdentity identity, string name)
 {
-	public IIdentity Identity { get; }
-	public string Name { get; }
-
-	public IcpSigner(IIdentity identity, string name)
-	{
-		Identity = identity;
-		Name = name;
-	}
+	public IIdentity Identity { get; } = identity;
+	public string Name { get; } = name;
+	public Principal Principal { get; } = identity.GetPrincipal();
 
 	public string SignTransaction(Guid txId, IcpSigningParameters signingParameters)
 	{
